@@ -1,22 +1,28 @@
 import chess as ch
 import random as rd
+import NeuralNet as nn
 
 class Engine:
 
     def __init__(self, board, maxDepth, color):
-        self.board=board
-        self.color=color
-        self.maxDepth=maxDepth
-    
-    def getBestMove(self):
-        return self.engine(None, 1)
+        self.board = board
+        self.color = color
+        self.maxDepth = maxDepth
+        self.evalFunct = self.aiEvalFunct
+        self.neuralNet = nn.ChessNet()
 
+    def aiEvalFunct(self):
+        print("Board:", self.board.tensorBoard())
+        output = self.neuralNet(self.board.tensorBoard())
+        print("Output of the network:", output)
+        return output
+    
     def evalFunct(self):
         compt = 0
         #Sums up the material values
         for i in range(64):
             compt+=self.squareResPoints(ch.SQUARES[i])
-        compt += self.mateOpportunity() + self.openning() + 0.001*rd.random()
+        compt += self.mateOpportunity() + self.openning()
         return compt
 
     def mateOpportunity(self):
@@ -60,66 +66,50 @@ class Engine:
             return pieceValue
 
         
+    def getBestMove(self):
+        # Always initialize move to a valid chess.Move object or None
+        best_move = self.engine(None, 1)
+        return best_move
+
     def engine(self, candidate, depth):
+
+        # Get list of legal moves of the current position
+        move_list = list(self.board.legal_moves)
+        best_candidate = None
+        best_move = None  # To track the best move
         
-        #reached max depth of search or no possible moves
-        if ( depth == self.maxDepth
-        or self.board.legal_moves.count() == 0):
+        # If maxDepth is 1, return a random move
+        if self.maxDepth == 1:
+            return move_list[rd.randint(0, len(move_list) - 1)]
+        
+        # Reached max depth of search or no possible moves
+        if depth == self.maxDepth or self.board.legal_moves.count() == 0:
             return self.evalFunct()
-        
-        else:
-            #get list of legal moves of the current position
-            moveListe = list(self.board.legal_moves)
-            
-            #initialise newCandidate
-            newCandidate = None
-            #(uneven depth means engine's turn)
-            if(depth % 2 != 0):
-                newCandidate = float("-inf")
-            else:
-                newCandidate = float("inf")
-            
-            #analyse board after deeper moves
-            for i in moveListe:
 
-                #Play move i
-                self.board.push(i)
+        # Initialize best_candidate for max or min
+        if depth % 2 != 0:  # Engine's turn, maximize
+            best_candidate = float("-inf")
+        else:  # Human's turn, minimize
+            best_candidate = float("inf")
 
-                #Get value of move i (by exploring the repercussions)
-                value = self.engine(newCandidate, depth + 1) 
+        # Analyze board after deeper moves
+        for move in move_list:
+            self.board.push(move)
+            value = self.engine(best_candidate, depth + 1)
+            self.board.pop()
 
-                #Basic minmax algorithm:
-                #if maximizing (engine's turn)
-                if(value > newCandidate and depth % 2 != 0):
-                    #need to save move played by the engine
-                    if (depth == 1):
-                        move=i
-                    newCandidate = value
-                #if minimizing (human player's turn)
-                elif(value < newCandidate and depth % 2 == 0):
-                    newCandidate = value
+            # Basic minimax algorithm
+            if depth % 2 != 0 and value > best_candidate:  # Maximizing
+                best_candidate = value
+                best_move = move
+            elif depth % 2 == 0 and value < best_candidate:  # Minimizing
+                best_candidate = value
+                best_move = move
 
-                #Alpha-beta prunning cuts: 
-                #(if previous move was made by the engine)
-                if (candidate != None
-                 and value < candidate
-                 and depth % 2 == 0):
-                    self.board.pop()
-                    break
-                #(if previous move was made by the human player)
-                elif (candidate != None 
-                and value > candidate 
-                and depth % 2 != 0):
-                    self.board.pop()
-                    break
-                
-                #Undo last move
-                self.board.pop()
+            # Alpha-beta pruning cuts
+            if (candidate is not None and
+                ((value < candidate and depth % 2 == 0) or
+                 (value > candidate and depth % 2 != 0))):
+                break
 
-            #Return result
-            if (depth>1):
-                #eturn value of a move in the tree
-                return newCandidate
-            else:
-                #return the move (only on first move)
-                return move
+        return best_move if depth == 1 else best_candidate
