@@ -33,3 +33,4 @@ output = net(input_board)
 
 # Print the output
 print(output.item())  # Assuming a single output value
+
